@@ -1,0 +1,91 @@
+name: dots_ocr_plugin
+description: A document parsing plugin based on dots.ocr model for PDF and image OCR.
+version: 0.1.0
+author: Dify
+icon: icon.svg
+
+settings:
+  - name: server_ip
+    type: text-input
+    default: "172.20.201.93"
+    required: true
+    label:
+      en_US: vLLM Server IP
+      zh_Hans: vLLM 服务器 IP
+    description:
+      en_US: The IP address of the vLLM server running dots.ocr.
+      zh_Hans: 运行 dots.ocr 的 vLLM 服务器 IP 地址。
+  - name: server_port
+    type: number-input
+    default: 8001
+    required: true
+    label:
+      en_US: vLLM Server Port
+      zh_Hans: vLLM 服务器端口
+    description:
+      en_US: The port of the vLLM server.
+      zh_Hans: vLLM 服务器的端口号。
+  - name: protocol
+    type: select
+    default: "http"
+    required: true
+    options:
+      - label: http
+        value: http
+      - label: https
+        value: https
+    label:
+      en_US: Protocol
+      zh_Hans: 协议类型
+  - name: model_name
+    type: text-input
+    default: "model"
+    required: true
+    label:
+      en_US: Model Name
+      zh_Hans: 模型名称
+  - name: timeout
+    type: number-input
+    default: 300
+    required: true
+    label:
+      en_US: Timeout (seconds)
+      zh_Hans: 超时时间（秒）
+
+tools:
+  - name: document_parsing
+    description: Parse PDF and image documents using dots.ocr.
+    parameters:
+      - name: file
+        type: file
+        required: true
+        label:
+          en_US: File
+          zh_Hans: 文件
+        description:
+          en_US: PDF or image file to parse.
+          zh_Hans: 需要解析的 PDF 或图像文件。
+      - name: prompt_mode
+        type: select
+        default: "prompt_layout_all_en"
+        required: true
+        options:
+          - label: Full Layout Analysis
+            value: prompt_layout_all_en
+          - label: Layout Only
+            value: prompt_layout_only_en
+          - label: OCR Only
+            value: prompt_ocr
+        label:
+          en_US: Parsing Mode
+          zh_Hans: 解析模式
+      - name: max_concurrency
+        type: number-input
+        default: 20
+        required: false
+        label:
+          en_US: Max Concurrency
+          zh_Hans: 最大并发数
+        description:
+          en_US: Maximum concurrent pages to process for PDF files.
+          zh_Hans: 处理 PDF 文件时的最大并行页数。

@@ -1,0 +1,6 @@
+memory_bank/
+draft/
+.cursor/
+**/__pycache__/
+*.pyc
+.env

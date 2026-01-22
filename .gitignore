@@ -4,3 +4,7 @@ draft/
 **/__pycache__/
 *.pyc
 .env
+.venv/
+*.difypkg
+manifest.yaml.bak
+.dify-plugin.yaml.bak

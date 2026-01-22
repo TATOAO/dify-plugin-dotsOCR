@@ -1,5 +1,5 @@
 [project]
-name = "dify-plugin-dotsocr"
+name = "dots_ocr"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"

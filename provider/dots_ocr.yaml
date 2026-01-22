@@ -1,0 +1,65 @@
+identity:
+  author: "tatoao"
+  name: "dots_ocr"
+  label:
+    en_US: "Dots.OCR"
+    zh_Hans: "Dots.OCR"
+  description:
+    en_US: "Dots.OCR document parsing service provider"
+    zh_Hans: "Dots.OCR 文档解析服务提供商"
+  icon: "_assets/icon.svg"
+
+credentials_schema:
+  - name: "server_ip"
+    type: "text-input"
+    required: true
+    default: "172.20.201.93"
+    label:
+      en_US: "vLLM Server IP"
+      zh_Hans: "vLLM 服务器 IP"
+    help:
+      en_US: "The IP address of the vLLM server running dots.ocr."
+      zh_Hans: "运行 dots.ocr 的 vLLM 服务器 IP 地址。"
+  - name: "server_port"
+    type: "number-input"
+    required: true
+    default: 8001
+    label:
+      en_US: "vLLM Server Port"
+      zh_Hans: "vLLM 服务器端口"
+    help:
+      en_US: "The port of the vLLM server."
+      zh_Hans: "vLLM 服务器的端口号。"
+  - name: "protocol"
+    type: "select"
+    required: true
+    default: "http"
+    options:
+      - label:
+          en_US: http
+          zh_Hans: http
+        value: http
+      - label:
+          en_US: https
+          zh_Hans: https
+        value: https
+    label:
+      en_US: "Protocol"
+      zh_Hans: "协议类型"
+  - name: "model_name"
+    type: "text-input"
+    required: true
+    default: "model"
+    label:
+      en_US: "Model Name"
+      zh_Hans: "模型名称"
+  - name: "timeout"
+    type: "number-input"
+    required: true
+    default: 300
+    label:
+      en_US: "Timeout (seconds)"
+      zh_Hans: "超时时间（秒）"
+
+tools:
+  - tools/document_parsing.yaml

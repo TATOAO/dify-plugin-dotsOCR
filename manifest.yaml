@@ -1,0 +1,29 @@
+version: 0.1.0
+type: plugin
+author: tatoao
+name: dots_ocr
+label:
+  en_US: Dots.OCR Document Parser
+  zh_Hans: Dots.OCR 文档解析器
+description:
+  en_US: A document parsing plugin based on dots.ocr model for PDF and image OCR.
+  zh_Hans: 基于 dots.ocr 模型的 PDF 和图像 OCR 文档解析插件。
+icon: _assets/icon.svg
+icon_dark: _assets/icon-dark.svg
+resource:
+  memory: 536870912
+  permissions: {}
+plugins:
+  tools:
+    - provider/dots_ocr.yaml
+meta:
+  version: 0.1.0
+  arch:
+    - amd64
+    - arm64
+  runner:
+    language: python
+    version: "3.12"
+    entrypoint: main
+privacy: README.md
+verified: false

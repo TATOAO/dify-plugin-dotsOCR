@@ -5,10 +5,40 @@ identity:
     en_US: "Dots.OCR"
     zh_Hans: "Dots.OCR"
   description:
-    en_US: "Dots.OCR hello world provider"
-    zh_Hans: "Dots.OCR 你好世界提供商"
+    en_US: "Dots.OCR multi-modal document parsing provider"
+    zh_Hans: "Dots.OCR 多模态文档解析提供商"
+  icon: icon.svg
 
-credentials_schema: []
+credentials_for_provider:
+  endpoint:
+    type: text-input
+    label:
+      en_US: "vLLM Endpoint"
+      zh_Hans: "vLLM 服务端点"
+    placeholder:
+      en_US: "http://172.20.201.93:8001/v1"
+      zh_Hans: "http://172.20.201.93:8001/v1"
+    required: true
+    help:
+      en_US: "The base URL of the vLLM server (including /v1)"
+      zh_Hans: "vLLM 服务器的基础 URL（包含 /v1）"
+  model_name:
+    type: text-input
+    label:
+      en_US: "Model Name"
+      zh_Hans: "模型名称"
+    default: "model"
+    required: true
+  api_key:
+    type: secret-input
+    label:
+      en_US: "API Key"
+      zh_Hans: "API 密钥"
+    default: "0"
+    required: false
 
 tools:
   - tools/document_parsing.yaml
+extra:
+  python:
+    source: provider/dots_ocr.py

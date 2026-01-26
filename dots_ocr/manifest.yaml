@@ -1,15 +1,15 @@
-version: 0.1.0
+version: 0.1.3
 type: plugin
 author: tatoao
 name: dots_ocr
 label:
-  en_US: Dots.OCR Hello World
-  zh_Hans: Dots.OCR 你好世界
+  en_US: Dots.OCR
+  zh_Hans: Dots.OCR
 description:
-  en_US: A minimized version of Dots.OCR plugin for installation testing.
-  zh_Hans: Dots.OCR 插件的最小化版本，用于安装测试。
-icon: _assets/icon.svg
-icon_dark: _assets/icon-dark.svg
+  en_US: Multi-modal document parsing plugin using Dots.OCR. Supports PDF and image layout analysis.
+  zh_Hans: 使用 Dots.OCR 的多模态文档解析插件。支持 PDF 和图像的布局分析。
+icon: icon.svg
+icon_dark: icon-dark.svg
 resource:
   memory: 536870912
   permission: {}
@@ -17,7 +17,7 @@ plugins:
   tools:
     - provider/dots_ocr.yaml
 meta:
-  version: 0.1.0
+  version: 0.1.3
   arch:
     - amd64
     - arm64

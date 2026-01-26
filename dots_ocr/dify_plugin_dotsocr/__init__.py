@@ -1,3 +1,1 @@
-from .plugin import DotsOCRPlugin
-
-__all__ = ['DotsOCRPlugin']
+# Dots.OCR Plugin Package

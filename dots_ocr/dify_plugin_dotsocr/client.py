@@ -1,37 +1,24 @@
 import base64
 import json
+import os
+import requests
 from io import BytesIO
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import requests
-
-try:
-    from openai import OpenAI
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
-
-try:
-    import fitz  # PyMuPDF
-    HAS_FITZ = True
-except ImportError:
-    HAS_FITZ = False
+from openai import OpenAI
+import fitz  # PyMuPDF
 
 class DotsOCRClient:
-    def __init__(self, ip='172.20.201.93', port=8001, protocol='http', model_name='model', timeout=300):
+    def __init__(self, endpoint: str, model_name: str = 'model', api_key: str = '0'):
         """
         Initialize dots.ocr client
-        :param ip: vLLM server IP
-        :param port: vLLM server port
-        :param protocol: http or https
-        :param model_name: model name (default model)
-        :param timeout: request timeout in seconds
+        :param endpoint: vLLM server endpoint (e.g. http://172.20.201.93:8001/v1)
+        :param model_name: Model name (default 'model')
+        :param api_key: API key (default '0')
         """
-        self.addr = f"{protocol}://{ip}:{port}/v1"
+        self.endpoint = endpoint.rstrip('/')
         self.model_name = model_name
-        self.timeout = timeout
-        if HAS_OPENAI:
-            self.client = OpenAI(api_key="0", base_url=self.addr)
+        self.client = OpenAI(api_key=api_key, base_url=self.endpoint)
         
     def image_to_base64(self, image):
         """Convert PIL Image to base64 string"""
@@ -43,7 +30,7 @@ class DotsOCRClient:
 
     def _get_prompt(self, mode):
         """
-        Get dots.ocr specific Prompt
+        Get specific Prompt for dots.ocr
         """
         prompts = {
             "prompt_layout_all_en": """Please output the layout information from the PDF image, including each layout element's bbox, its category, and the corresponding text content within the bbox. 
@@ -70,81 +57,43 @@ class DotsOCRClient:
         prompt = self._get_prompt(prompt_mode)
         base64_image = self.image_to_base64(image)
         
-        # vLLM needs specific prompt prefix to recognize image
+        # vLLM needs specific prompt prefix to identify images
         full_prompt = f"<|img|><|imgpad|><|endofimg|>{prompt}"
         
-        if HAS_OPENAI:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image_url", "image_url": {"url": base64_image}},
-                            {"type": "text", "text": full_prompt},
-                        ],
-                    }
-                ],
-                temperature=0.1,
-                top_p=0.9,
-                max_completion_tokens=16384,
-                timeout=self.timeout
-            )
-            return response.choices[0].message.content
-        else:
-            # Fallback to requests
-            payload = {
-                "model": self.model_name,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image_url", "image_url": {"url": base64_image}},
-                            {"type": "text", "text": full_prompt},
-                        ],
-                    }
-                ],
-                "temperature": 0.1,
-                "max_tokens": 16384
-            }
-            res = requests.post(f"{self.addr}/chat/completions", json=payload, timeout=self.timeout)
-            res.raise_for_status()
-            return res.json()['choices'][0]['message']['content']
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": base64_image}},
+                        {"type": "text", "text": full_prompt},
+                    ],
+                }
+            ],
+            temperature=0.1,
+            top_p=0.9,
+            max_completion_tokens=16384,
+        )
+        return response.choices[0].message.content
 
-    def parse_pdf(self, pdf_bytes, prompt_mode="prompt_layout_all_en", max_concurrency=20):
+    def parse_pdf(self, pdf_stream: bytes, prompt_mode="prompt_layout_all_en", max_concurrency=20):
         """
-        Parse PDF file (parallel calling dots.ocr)
-        :param pdf_bytes: PDF file content in bytes
+        Parse PDF file (parallel call to dots.ocr)
         """
-        if not HAS_FITZ:
-            raise ImportError("Please install pymupdf (pip install pymupdf) to process PDF files.")
-        
-        try:
-            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        except Exception as e:
-            raise ValueError(f"Failed to open PDF: {str(e)}")
-            
-        if len(doc) == 0:
-            return []
-            
+        doc = fitz.open(stream=pdf_stream, filetype="pdf")
         pages_to_process = []
         
         for page_num in range(len(doc)):
-            try:
-                page = doc[page_num]
-                pix = page.get_pixmap(dpi=200)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                pages_to_process.append((page_num + 1, img))
-            except Exception as e:
-                # If a specific page fails to render, we'll mark it as an error in the result
-                pages_to_process.append((page_num + 1, None))
+            page = doc[page_num]
+            pix = page.get_pixmap(dpi=200)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            pages_to_process.append((page_num + 1, img))
         
         results_map = {}
         
         def process_page(page_info):
             page_num, img = page_info
-            if img is None:
-                return page_num, "Error: Failed to render page"
             output = self.inference(img, prompt_mode)
             return page_num, output
 
@@ -156,9 +105,8 @@ class DotsOCRClient:
                     p_num, content = future.result()
                     results_map[p_num] = content
                 except Exception as exc:
-                    results_map[page_num] = f"Error: {str(exc)}"
+                    results_map[page_num] = f"Error: {exc}"
 
-        # Sort results by page number
         final_results = []
         for p_num in sorted(results_map.keys()):
             final_results.append({

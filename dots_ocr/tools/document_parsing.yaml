@@ -2,14 +2,59 @@ identity:
   name: "document_parsing"
   author: "tatoao"
   label:
-    en_US: "Hello World"
-    zh_Hans: "你好世界"
+    en_US: "Document Parsing"
+    zh_Hans: "文档解析"
 description:
   human:
-    en_US: "A simple hello world tool for debugging."
-    zh_Hans: "一个用于调试的简单你好世界工具。"
-  llm: "A simple hello world tool that returns a greeting."
-parameters: []
+    en_US: "Parse PDF or images into structured layout and text using Dots.OCR."
+    zh_Hans: "使用 Dots.OCR 将 PDF 或图像解析为结构化的布局和文本。"
+  llm: "A tool to extract text and layout from PDF or images. Supports full layout analysis, layout only, and pure OCR modes."
+parameters:
+  - name: file
+    type: file
+    label:
+      en_US: "Document File"
+      zh_Hans: "文档文件"
+    required: true
+    human_description:
+      en_US: "The PDF or image file to parse."
+      zh_Hans: "要解析的 PDF 或图像文件。"
+    form: form
+  - name: mode
+    type: select
+    label:
+      en_US: "Parsing Mode"
+      zh_Hans: "解析模式"
+    required: true
+    default: "prompt_layout_all_en"
+    options:
+      - value: "prompt_layout_all_en"
+        label:
+          en_US: "Full Layout Analysis"
+          zh_Hans: "完整布局分析"
+      - value: "prompt_layout_only_en"
+        label:
+          en_US: "Layout Only"
+          zh_Hans: "仅布局识别"
+      - value: "prompt_ocr"
+        label:
+          en_US: "Pure OCR"
+          zh_Hans: "纯 OCR 模式"
+    human_description:
+      en_US: "The parsing mode to use."
+      zh_Hans: "使用的解析模式。"
+    form: form
+  - name: max_concurrency
+    type: number
+    label:
+      en_US: "Max Concurrency"
+      zh_Hans: "最大并发数"
+    required: false
+    default: 10
+    human_description:
+      en_US: "Maximum number of parallel pages for PDF processing."
+      zh_Hans: "PDF 处理的最大并行页数。"
+    form: form
 extra:
   python:
     source: tools/document_parsing.py

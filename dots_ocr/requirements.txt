@@ -1,1 +1,5 @@
-# Minimized requirements for debugging installation
+dify_plugin>=0.4.0,<0.7.0
+openai
+pillow
+pymupdf
+requests

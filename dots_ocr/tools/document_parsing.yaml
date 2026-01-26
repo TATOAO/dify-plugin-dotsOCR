@@ -1,0 +1,15 @@
+identity:
+  name: "document_parsing"
+  author: "tatoao"
+  label:
+    en_US: "Hello World"
+    zh_Hans: "你好世界"
+description:
+  human:
+    en_US: "A simple hello world tool for debugging."
+    zh_Hans: "一个用于调试的简单你好世界工具。"
+  llm: "A simple hello world tool that returns a greeting."
+parameters: []
+extra:
+  python:
+    source: tools/document_parsing.py

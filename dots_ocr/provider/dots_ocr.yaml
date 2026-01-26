@@ -1,0 +1,14 @@
+identity:
+  author: "tatoao"
+  name: "dots_ocr"
+  label:
+    en_US: "Dots.OCR"
+    zh_Hans: "Dots.OCR"
+  description:
+    en_US: "Dots.OCR hello world provider"
+    zh_Hans: "Dots.OCR 你好世界提供商"
+
+credentials_schema: []
+
+tools:
+  - tools/document_parsing.yaml

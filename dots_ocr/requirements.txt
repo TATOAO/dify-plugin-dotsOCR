@@ -1,0 +1,1 @@
+# Minimized requirements for debugging installation

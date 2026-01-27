@@ -103,12 +103,14 @@ class DotsOCRClient:
     def parse_pdf(self, pdf_stream: bytes, prompt_mode="prompt_layout_all_en", max_concurrency=20):
         """
         Parse PDF file (parallel call to dots.ocr)
+        Yields progress messages and finally the results
         """
         try:
             doc = fitz.open(stream=pdf_stream, filetype="pdf")
             total_pages = len(doc)
             pages_to_process = []
             
+            yield f"Extracting {total_pages} pages from PDF..."
             for page_num in range(total_pages):
                 page = doc[page_num]
                 pix = page.get_pixmap(dpi=200)
@@ -119,6 +121,8 @@ class DotsOCRClient:
             
             results_map = {}
             completed_count = 0
+            
+            yield f"Starting parallel processing with {max_concurrency} workers..."
             
             def process_page(page_info):
                 page_num, img = page_info
@@ -140,9 +144,12 @@ class DotsOCRClient:
                         p_num, content, error = future.result()
                         if error:
                             results_map[p_num] = error
+                            yield f"Page {p_num} failed: {error}"
                         else:
                             results_map[p_num] = content
+                            yield f"Page {p_num} completed ({completed_count + 1}/{total_pages})"
                         completed_count += 1
+                        
                     except Exception as exc:
                         # Store detailed error information
                         error_msg = str(exc)
@@ -150,6 +157,7 @@ class DotsOCRClient:
                             error_msg = f"Timeout error on page {page_num}: Request exceeded {self.timeout} seconds"
                         results_map[page_num] = f"Error: {error_msg}"
                         completed_count += 1
+                        yield f"Page {page_num} critical error: {error_msg}"
 
             final_results = []
             for p_num in sorted(results_map.keys()):
@@ -158,7 +166,7 @@ class DotsOCRClient:
                     "content": results_map[p_num]
                 })
                 
-            return final_results
+            yield final_results
         except Exception as e:
             # Catch any errors during PDF processing
             raise Exception(f"PDF parsing failed: {str(e)}") from e

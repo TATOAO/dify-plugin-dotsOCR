@@ -133,9 +133,19 @@ class DocumentParsingTool(Tool):
         try:
             if extension == 'pdf':
                 # Send progress message
-                yield self.create_text_message("Starting PDF parsing...")
+                yield self.create_text_message(f"Starting PDF parsing with max_concurrency={max_concurrency}...")
                 
-                results = client.parse_pdf(file_content, prompt_mode=mode, max_concurrency=max_concurrency)
+                results = []
+                # parse_pdf is now a generator that yields progress strings and finally the results list
+                for item in client.parse_pdf(file_content, prompt_mode=mode, max_concurrency=max_concurrency):
+                    if isinstance(item, str):
+                        yield self.create_text_message(item)
+                    elif isinstance(item, list):
+                        results = item
+                
+                if not results:
+                    yield self.create_text_message("Error: No results returned from PDF parsing.")
+                    return
                 
                 # Check if any page had errors
                 error_pages = [r for r in results if isinstance(r.get('content'), str) and r.get('content', '').startswith('Error:')]
@@ -158,21 +168,13 @@ class DocumentParsingTool(Tool):
                         yield self.create_text_message(f"Error: JSON serialization failed: {str(e)}")
                         return
 
-                    # CRITICAL: For large results, the plugin framework's JSON message often becomes {} 
-                    # causing an AssertionError in Dify. We will output the JSON string as text 
-                    # if it's large, which is much more stable in Dify.
-                    
-                    if len(json_str) > 30 * 1024:  # > 30KB
-                        yield self.create_text_message("Note: Result is large, returning as formatted JSON text to ensure stability.")
+                    # Try actual JSON message first (wrapped in a dict)
+                    # We removed the size restriction as requested
+                    try:
+                        yield self.create_json_message({"pages": results})
+                    except Exception:
+                        # Fallback to text message if JSON message fails
                         yield self.create_text_message(json_str)
-                    else:
-                        try:
-                            # For small results, try actual JSON message first
-                            # MUST wrap in a dict, Dify create_json_message doesn't like lists
-                            yield self.create_json_message({"pages": results})
-                        except Exception:
-                            # Fallback to text message
-                            yield self.create_text_message(json_str)
                     
                 except Exception as delivery_e:
                     yield self.create_text_message(f"Error during result delivery: {str(delivery_e)}")
@@ -184,22 +186,19 @@ class DocumentParsingTool(Tool):
                 image = Image.open(BytesIO(file_content))
                 result = client.inference(image, prompt_mode=mode)
                 
-                # Try to parse as JSON string to ensure stability
+                # Process result
                 if result:
-                    if len(result) > 30 * 1024:
+                    try:
+                        # Try to parse as JSON first
+                        json_data = json.loads(result)
+                        # Wrap in a dict for stability
+                        if isinstance(json_data, dict):
+                            yield self.create_json_message(json_data)
+                        else:
+                            yield self.create_json_message({"result": json_data})
+                    except Exception:
+                        # Fallback to text
                         yield self.create_text_message(result)
-                    else:
-                        try:
-                            # Try to parse as JSON first
-                            json_data = json.loads(result)
-                            # Wrap in a dict for stability
-                            if isinstance(json_data, dict):
-                                yield self.create_json_message(json_data)
-                            else:
-                                yield self.create_json_message({"result": json_data})
-                        except Exception:
-                            # Fallback to text
-                            yield self.create_text_message(result)
                 else:
                     yield self.create_text_message("Error: Empty result from image parsing.")
                     

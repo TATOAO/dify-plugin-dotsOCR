@@ -21,12 +21,16 @@ class DocumentParsingTool(Tool):
         endpoint = self.runtime.credentials.get('endpoint')
         model_name = self.runtime.credentials.get('model_name', 'model')
         api_key = self.runtime.credentials.get('api_key', '0')
+        files_url_from_config = self.runtime.credentials.get('files_url', '').strip()
         
         if not endpoint:
             yield self.create_text_message("Error: vLLM Endpoint not configured in provider settings.")
             return
-            
-        client = DotsOCRClient(endpoint=endpoint, model_name=model_name, api_key=api_key)
+        
+        # Set timeout to match MAX_REQUEST_TIMEOUT (300 seconds)
+        # This ensures the client timeout matches the plugin timeout
+        timeout = 300
+        client = DotsOCRClient(endpoint=endpoint, model_name=model_name, api_key=api_key, timeout=timeout)
         
         # Get file content
         # Try to get file content via blob first
@@ -61,20 +65,39 @@ class DocumentParsingTool(Tool):
             
             # Handle relative path - need to prepend FILES_URL
             if not file_url.startswith(('http://', 'https://')):
-                # Try to get FILES_URL from environment variable
-                files_url = os.environ.get('FILES_URL', '').rstrip('/')
+                # Try to get FILES_URL in priority order:
+                # 1. From plugin configuration (highest priority)
+                # 2. From environment variable
+                # 3. From runtime attributes
+                files_url = None
                 
-                # Try to get from runtime if available (some Dify versions may provide this)
+                # Priority 1: From plugin configuration
+                if files_url_from_config:
+                    files_url = files_url_from_config.rstrip('/')
+                
+                # Priority 2: From environment variable
+                if not files_url:
+                    files_url = os.environ.get('FILES_URL', '').rstrip('/')
+                
+                # Priority 3: Try to get from runtime if available (some Dify versions may provide this)
                 if not files_url:
                     try:
+                        # Try different possible attribute names
                         files_url = getattr(self.runtime, 'files_url', None)
+                        if not files_url:
+                            files_url = getattr(self.runtime, 'FILES_URL', None)
+                        if not files_url:
+                            # Try to get from runtime.config or runtime.settings
+                            if hasattr(self.runtime, 'config'):
+                                files_url = getattr(self.runtime.config, 'files_url', None) or getattr(self.runtime.config, 'FILES_URL', None)
                         if files_url:
-                            files_url = files_url.rstrip('/')
-                    except:
+                            files_url = str(files_url).rstrip('/')
+                    except Exception as runtime_error:
+                        # Silently continue if runtime doesn't have files_url
                         pass
                 
                 if not files_url:
-                    yield self.create_text_message(f"Error: Invalid file URL '{file_url}': Request URL is missing an 'http://' or 'https://' protocol. Please ensure the `FILES_URL` environment variable is set in your Dify environment (e.g., FILES_URL=http://your-dify-domain.com).")
+                    yield self.create_text_message(f"Error: Invalid file URL '{file_url}': Request URL is missing an 'http://' or 'https://' protocol. Please configure 'Dify Files URL' in the plugin settings, or set the `FILES_URL` environment variable in your Dify environment (e.g., FILES_URL=http://your-dify-domain.com).")
                     return
                 
                 # Construct absolute URL
@@ -97,6 +120,8 @@ class DocumentParsingTool(Tool):
             return
 
         extension = file.extension.lower() if file.extension else ''
+        # Remove leading dot if present (e.g., ".pdf" -> "pdf")
+        extension = extension.lstrip('.') if extension else ''
         if not extension:
             # Try to guess from mime_type if extension is not available
             mime_type = file.mime_type.lower() if file.mime_type else ''
@@ -107,20 +132,121 @@ class DocumentParsingTool(Tool):
         
         try:
             if extension == 'pdf':
+                # Send progress message
+                yield self.create_text_message("Starting PDF parsing...")
+                
                 results = client.parse_pdf(file_content, prompt_mode=mode, max_concurrency=max_concurrency)
-                yield self.create_json_message(results)
+                
+                # Check if any page had errors
+                error_pages = [r for r in results if isinstance(r.get('content'), str) and r.get('content', '').startswith('Error:')]
+                if error_pages:
+                    page_nums = [str(r['page']) for r in error_pages]
+                    error_info = f"Some pages failed: {', '.join(['Page ' + p for p in page_nums])}"
+                    yield self.create_text_message(f"Warning: {error_info}. Partial results:")
+                
+                # Validate and serialize results before sending
+                try:
+                    # Ensure results is not empty
+                    if not results:
+                        yield self.create_text_message("Error: No results returned from PDF parsing.")
+                        return
+                    
+                    # Try to serialize to JSON string to ensure data integrity
+                    try:
+                        json_str = json.dumps(results, indent=2, ensure_ascii=False)
+                    except Exception as e:
+                        yield self.create_text_message(f"Error: JSON serialization failed: {str(e)}")
+                        return
+
+                    # CRITICAL: For large results, the plugin framework's JSON message often becomes {} 
+                    # causing an AssertionError in Dify. We will output the JSON string as text 
+                    # if it's large, which is much more stable in Dify.
+                    
+                    if len(json_str) > 30 * 1024:  # > 30KB
+                        yield self.create_text_message("Note: Result is large, returning as formatted JSON text to ensure stability.")
+                        yield self.create_text_message(json_str)
+                    else:
+                        try:
+                            # For small results, try actual JSON message first
+                            # MUST wrap in a dict, Dify create_json_message doesn't like lists
+                            yield self.create_json_message({"pages": results})
+                        except Exception:
+                            # Fallback to text message
+                            yield self.create_text_message(json_str)
+                    
+                except Exception as delivery_e:
+                    yield self.create_text_message(f"Error during result delivery: {str(delivery_e)}")
+            
             else:
                 # Assume it's an image
+                yield self.create_text_message("Starting image parsing...")
+                
                 image = Image.open(BytesIO(file_content))
                 result = client.inference(image, prompt_mode=mode)
                 
-                # Try to parse as JSON if possible, otherwise return as text
-                try:
-                    json_data = json.loads(result)
-                    yield self.create_json_message(json_data)
-                except:
-                    yield self.create_text_message(result)
+                # Try to parse as JSON string to ensure stability
+                if result:
+                    if len(result) > 30 * 1024:
+                        yield self.create_text_message(result)
+                    else:
+                        try:
+                            # Try to parse as JSON first
+                            json_data = json.loads(result)
+                            # Wrap in a dict for stability
+                            if isinstance(json_data, dict):
+                                yield self.create_json_message(json_data)
+                            else:
+                                yield self.create_json_message({"result": json_data})
+                        except Exception:
+                            # Fallback to text
+                            yield self.create_text_message(result)
+                else:
+                    yield self.create_text_message("Error: Empty result from image parsing.")
                     
+        except KeyboardInterrupt:
+            yield self.create_text_message("Error: Parsing was interrupted by user.")
         except Exception as e:
-            yield self.create_text_message(f"Error during parsing: {str(e)}")
+            # Provide more detailed error information
+            import traceback
+            error_traceback = traceback.format_exc()
+            error_msg = str(e)
+            error_type = type(e).__name__
+            
+            # Try to get more context about the error
+            try:
+                # Check if client exists
+                client_info = f"Client timeout: {client.timeout}s" if 'client' in locals() else "Client not initialized"
+            except:
+                client_info = "Unable to get client info"
+            
+            # Include full traceback in error message for debugging
+            full_error = f"Error type: {error_type}\nError message: {error_msg}\n{client_info}\n\nTraceback:\n{error_traceback}"
+            
+            # Format error message based on error type
+            if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                formatted_error = f"Request timeout: The dots_ocr service took longer than {client.timeout if 'client' in locals() else 300} seconds to respond. This may indicate the service is overloaded or the document is too complex.\n\nError details: {error_msg}"
+            elif "json" in error_msg.lower() or "serialization" in error_msg.lower():
+                formatted_error = f"JSON serialization error: {error_msg}\n\nThis may indicate the response from dots_ocr is too large or contains invalid data."
+            elif "connection" in error_msg.lower() or "network" in error_msg.lower():
+                formatted_error = f"Network error: {error_msg}\n\nPlease check the dots_ocr service endpoint and network connectivity."
+            else:
+                formatted_error = f"Error during parsing: {error_msg}"
+            
+            # Send error message (ensure it's not too long for Dify)
+            # Dify may have limits on message length, so we'll keep it reasonable
+            max_error_length = 3000
+            if len(full_error) > max_error_length:
+                error_to_send = f"{formatted_error}\n\nFull error details (truncated):\n{full_error[:max_error_length]}..."
+            else:
+                error_to_send = f"{formatted_error}\n\nFull error details:\n{full_error}"
+            
+            try:
+                yield self.create_text_message(error_to_send)
+            except Exception as yield_error:
+                # If even yielding the error fails, try a minimal error message
+                try:
+                    yield self.create_text_message(f"Critical error: {error_type}: {error_msg[:500]}")
+                except:
+                    # Last resort - this shouldn't happen but if it does, at least we tried
+                    pass
 

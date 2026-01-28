@@ -161,20 +161,72 @@ class DocumentParsingTool(Tool):
                         yield self.create_text_message("Error: No results returned from PDF parsing.")
                         return
                     
-                    # Try to serialize to JSON string to ensure data integrity
-                    try:
-                        json_str = json.dumps(results, indent=2, ensure_ascii=False)
-                    except Exception as e:
-                        yield self.create_text_message(f"Error: JSON serialization failed: {str(e)}")
-                        return
+                    # Extract full text from all pages
+                    full_text_parts = []
+                    for page_result in results:
+                        content = page_result.get('content', '')
+                        if not content:
+                            continue
+                            
+                        if isinstance(content, str):
+                            content_str = content.strip()
+                            if not content_str:
+                                continue
+                            try:
+                                # Try to parse as JSON if it looks like it (JSON list or object)
+                                if content_str.startswith(('[', '{')):
+                                    elements = json.loads(content_str)
+                                    if isinstance(elements, list):
+                                        for element in elements:
+                                            text = element.get('text', '')
+                                            if text:
+                                                full_text_parts.append(str(text))
+                                    elif isinstance(elements, dict):
+                                        text = elements.get('text', '')
+                                        if text:
+                                            full_text_parts.append(str(text))
+                                        else:
+                                            # If it's a dict but no text field, use the whole thing as string
+                                            full_text_parts.append(content_str)
+                                    else:
+                                        full_text_parts.append(content_str)
+                                else:
+                                    # Not JSON, just plain text (e.g. from prompt_ocr)
+                                    full_text_parts.append(content_str)
+                            except Exception:
+                                # If JSON parsing fails, use as plain text
+                                full_text_parts.append(content_str)
+                        elif isinstance(content, (list, dict)):
+                            # Already parsed JSON
+                            if isinstance(content, list):
+                                for element in content:
+                                    if isinstance(element, dict) and 'text' in element:
+                                        full_text_parts.append(str(element['text']))
+                            elif isinstance(content, dict):
+                                if 'text' in content:
+                                    full_text_parts.append(str(content['text']))
+                    
+                    full_text = "\n\n".join(full_text_parts)
+                    
+                    # Construct output data matching output_schema
+                    result_object = {
+                        "full_text": full_text,
+                        "pages": results
+                    }
 
-                    # Try actual JSON message first (wrapped in a dict)
-                    # We removed the size restriction as requested
+                    # Use create_variable_message to explicitly fill output variables
+                    # as suggested by Dify plugin development best practices
                     try:
-                        yield self.create_json_message({"pages": results})
-                    except Exception:
-                        # Fallback to text message if JSON message fails
-                        yield self.create_text_message(json_str)
+                        yield self.create_variable_message("full_text", full_text)
+                        yield self.create_variable_message("pages", results)
+                        yield self.create_variable_message("result", result_object)
+                    except Exception as e:
+                        # Fallback: try to send at least the full_text if complex types fail
+                        try:
+                            yield self.create_variable_message("full_text", full_text)
+                        except:
+                            # Last resort: send as text
+                            yield self.create_text_message(json.dumps(result_object, ensure_ascii=False))
                     
                 except Exception as delivery_e:
                     yield self.create_text_message(f"Error during result delivery: {str(delivery_e)}")
@@ -190,15 +242,42 @@ class DocumentParsingTool(Tool):
                 if result:
                     try:
                         # Try to parse as JSON first
-                        json_data = json.loads(result)
-                        # Wrap in a dict for stability
-                        if isinstance(json_data, dict):
-                            yield self.create_json_message(json_data)
+                        content_str = result.strip()
+                        full_text = ""
+                        json_data = None
+                        
+                        if content_str.startswith(('[', '{')):
+                            try:
+                                json_data = json.loads(content_str)
+                                if isinstance(json_data, list):
+                                    full_text = "\n\n".join([str(item.get('text', '')) for item in json_data if isinstance(item, dict) and item.get('text')])
+                                elif isinstance(json_data, dict):
+                                    full_text = str(json_data.get('text', ''))
+                                    if not full_text and 'data' in json_data:
+                                        full_text = str(json_data['data'])
+                            except:
+                                full_text = content_str
                         else:
-                            yield self.create_json_message({"result": json_data})
-                    except Exception:
-                        # Fallback to text
-                        yield self.create_text_message(result)
+                            full_text = content_str
+                        
+                        # Prepare standardized output data
+                        # For images, we create a single-page list for consistency
+                        image_results = [{
+                            "page": 1,
+                            "content": result
+                        }]
+                        
+                        result_object = json_data if isinstance(json_data, (dict, list)) else {"raw_result": result}
+                        
+                        # Use create_variable_message to explicitly fill output variables
+                        yield self.create_variable_message("full_text", full_text)
+                        yield self.create_variable_message("pages", image_results)
+                        yield self.create_variable_message("result", result_object)
+                        
+                    except Exception as e:
+                        # Fallback
+                        yield self.create_variable_message("full_text", result)
+                        yield self.create_variable_message("result", {"raw_result": result, "error": str(e)})
                 else:
                     yield self.create_text_message("Error: Empty result from image parsing.")
                     

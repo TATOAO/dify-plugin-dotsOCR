@@ -55,6 +55,29 @@ parameters:
       en_US: "Maximum number of parallel pages for PDF processing."
       zh_Hans: "PDF 处理的最大并行页数。"
     form: form
+output_schema:
+  type: object
+  properties:
+    full_text:
+      type: string
+      label:
+        en_US: "Full Text"
+        zh_Hans: "全文文本"
+      description: "Combined text content from all pages without layout information."
+    pages:
+      type: array
+      label:
+        en_US: "Pages"
+        zh_Hans: "页列表"
+      description: "Detailed JSON results for each page, including layout and text."
+      items:
+        type: object
+    result:
+      type: object
+      label:
+        en_US: "Result"
+        zh_Hans: "完整结果"
+      description: "The complete parsing result object."
 extra:
   python:
     source: tools/document_parsing.py

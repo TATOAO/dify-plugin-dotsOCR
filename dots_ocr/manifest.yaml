@@ -1,4 +1,4 @@
-version: 0.2.6
+version: 0.2.7
 type: plugin
 author: tatoao
 name: dots_ocr
@@ -17,7 +17,7 @@ plugins:
   tools:
     - provider/dots_ocr.yaml
 meta:
-  version: 0.2.6
+  version: 0.2.7
   arch:
     - amd64
     - arm64

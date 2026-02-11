@@ -48,6 +48,18 @@ credentials_for_provider:
     help:
       en_US: "The base URL of your Dify instance for file access. Used to convert relative file paths to absolute URLs. If not set, the plugin will try to use the FILES_URL environment variable. Examples: http://localhost:5001, https://dify.example.com"
       zh_Hans: "Dify 实例的基础访问地址，用于将相对文件路径转换为完整URL。如果不设置，插件将尝试使用 FILES_URL 环境变量。示例：http://localhost:5001, https://dify.example.com"
+  pdf_service_url:
+    type: text-input
+    label:
+      en_US: "Word to PDF Service URL"
+      zh_Hans: "Word 转 PDF 服务地址"
+    placeholder:
+      en_US: "http://localhost:31234/convert"
+      zh_Hans: "http://localhost:31234/convert"
+    required: false
+    help:
+      en_US: "Optional. URL of the Word-to-PDF conversion service. When configured, the plugin accepts Word files (.doc/.docx) by converting them to PDF before parsing. The service should accept POST multipart form-data with a 'file' field and return PDF binary content."
+      zh_Hans: "可选。Word 转 PDF 转换服务的地址。配置后，插件将支持上传 Word 文件（.doc/.docx），自动转换为 PDF 后再解析。该服务需接受 POST multipart/form-data 请求（字段名 'file'），返回 PDF 二进制内容。"
 
 tools:
   - tools/document_parsing.yaml

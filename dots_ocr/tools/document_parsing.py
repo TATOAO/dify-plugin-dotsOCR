@@ -22,7 +22,8 @@ class DocumentParsingTool(Tool):
         model_name = self.runtime.credentials.get('model_name', 'model')
         api_key = self.runtime.credentials.get('api_key', '0')
         files_url_from_config = self.runtime.credentials.get('files_url', '').strip()
-        
+        pdf_service_url = self.runtime.credentials.get('pdf_service_url', '').strip()
+
         if not endpoint:
             yield self.create_text_message("Error: vLLM Endpoint not configured in provider settings.")
             return
@@ -127,9 +128,47 @@ class DocumentParsingTool(Tool):
             mime_type = file.mime_type.lower() if file.mime_type else ''
             if 'pdf' in mime_type:
                 extension = 'pdf'
+            elif 'word' in mime_type or 'msword' in mime_type or 'officedocument' in mime_type:
+                extension = 'docx'
             elif 'image' in mime_type:
                 extension = 'png' # default image
-        
+
+        # Handle Word files: convert to PDF first
+        if extension in ('doc', 'docx'):
+            if not pdf_service_url:
+                yield self.create_text_message(
+                    "Error: Word 文件（.doc/.docx）需要配置 'Word to PDF Service URL' 才能解析。"
+                    "请在插件设置中配置 'Word to PDF Service URL'（例如：http://localhost:31234/convert）。\n\n"
+                    "Error: Word files (.doc/.docx) require 'Word to PDF Service URL' to be configured. "
+                    "Please set 'Word to PDF Service URL' in the plugin provider settings (e.g., http://localhost:31234/convert)."
+                )
+                return
+
+            yield self.create_text_message("Converting Word document to PDF...")
+            try:
+                import requests as req
+                filename = getattr(file, 'filename', None) or f"document.{extension}"
+                resp = req.post(
+                    pdf_service_url,
+                    files={"file": (filename, file_content)},
+                    timeout=120,
+                )
+                if resp.status_code == 200:
+                    file_content = resp.content
+                    extension = 'pdf'
+                else:
+                    yield self.create_text_message(
+                        f"Error: Word 转 PDF 失败，服务返回状态码 {resp.status_code}。"
+                        f"请检查 Word to PDF 服务是否正常运行（{pdf_service_url}）。"
+                    )
+                    return
+            except Exception as convert_e:
+                yield self.create_text_message(
+                    f"Error: Word 转 PDF 失败：{str(convert_e)}。"
+                    f"请检查 Word to PDF 服务是否正常运行（{pdf_service_url}）。"
+                )
+                return
+
         try:
             if extension == 'pdf':
                 # Send progress message

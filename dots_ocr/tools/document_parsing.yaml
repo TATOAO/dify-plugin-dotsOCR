@@ -6,9 +6,9 @@ identity:
     zh_Hans: "文档解析"
 description:
   human:
-    en_US: "Parse PDF or images into structured layout and text using Dots.OCR."
-    zh_Hans: "使用 Dots.OCR 将 PDF 或图像解析为结构化的布局和文本。"
-  llm: "A tool to extract text and layout from PDF or images. Supports full layout analysis, layout only, and pure OCR modes."
+    en_US: "Parse PDF, Word (.doc/.docx) or images into structured layout and text using Dots.OCR."
+    zh_Hans: "使用 Dots.OCR 将 PDF、Word（.doc/.docx）或图像解析为结构化的布局和文本。"
+  llm: "A tool to extract text and layout from PDF, Word (.doc/.docx) or images. Supports full layout analysis, layout only, and pure OCR modes. Word files require the Word-to-PDF service to be configured."
 parameters:
   - name: file
     type: file
@@ -17,8 +17,8 @@ parameters:
       zh_Hans: "文档文件"
     required: true
     human_description:
-      en_US: "The PDF or image file to parse."
-      zh_Hans: "要解析的 PDF 或图像文件。"
+      en_US: "The PDF, Word (.doc/.docx) or image file to parse."
+      zh_Hans: "要解析的 PDF、Word（.doc/.docx）或图像文件。"
     form: form
   - name: mode
     type: select

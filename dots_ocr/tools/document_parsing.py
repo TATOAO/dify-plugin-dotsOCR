@@ -11,8 +11,7 @@ class DocumentParsingTool(Tool):
     def _invoke(self, tool_parameters: Dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
         file = tool_parameters.get('file')
         if not file:
-            yield self.create_text_message("Error: No file provided.")
-            return
+            raise ValueError("No file provided.")
         
         mode = tool_parameters.get('mode', 'prompt_layout_all_en')
         max_concurrency = int(tool_parameters.get('max_concurrency', 10))
@@ -25,8 +24,7 @@ class DocumentParsingTool(Tool):
         pdf_service_url = self.runtime.credentials.get('pdf_service_url', '').strip()
 
         if not endpoint:
-            yield self.create_text_message("Error: vLLM Endpoint not configured in provider settings.")
-            return
+            raise ValueError("vLLM Endpoint not configured in provider settings.")
         
         # Set timeout to match MAX_REQUEST_TIMEOUT (300 seconds)
         # This ensures the client timeout matches the plugin timeout
@@ -61,8 +59,7 @@ class DocumentParsingTool(Tool):
                 file_url = getattr(file, 'remote_url', None) or getattr(file, 'url', None)
             
             if not file_url:
-                yield self.create_text_message(f"Error: Unable to access file blob and no URL available. Original error: {str(e)}. Please ensure the `FILES_URL` environment variable is set in your Dify environment.")
-                return
+                raise ValueError(f"Unable to access file blob and no URL available. Original error: {str(e)}. Please ensure the `FILES_URL` environment variable is set in your Dify environment.")
             
             # Handle relative path - need to prepend FILES_URL
             if not file_url.startswith(('http://', 'https://')):
@@ -98,27 +95,25 @@ class DocumentParsingTool(Tool):
                         pass
                 
                 if not files_url:
-                    yield self.create_text_message(f"Error: Invalid file URL '{file_url}': Request URL is missing an 'http://' or 'https://' protocol. Please configure 'Dify Files URL' in the plugin settings, or set the `FILES_URL` environment variable in your Dify environment (e.g., FILES_URL=http://your-dify-domain.com).")
-                    return
+                    raise ValueError(f"Invalid file URL '{file_url}': Request URL is missing an 'http://' or 'https://' protocol. Please configure 'Dify Files URL' in the plugin settings, or set the `FILES_URL` environment variable in your Dify environment (e.g., FILES_URL=http://your-dify-domain.com).")
                 
                 # Construct absolute URL
                 file_url = f"{files_url}/{file_url.lstrip('/')}"
             
             # Download file from URL
             try:
-                resp = requests.get(file_url, timeout=30)
+                resp = requests.get(file_url, timeout=100)
                 if resp.status_code == 200:
                     file_content = resp.content
                 else:
-                    yield self.create_text_message(f"Error: Failed to download file from {file_url} (Status {resp.status_code}). Please check Dify `FILES_URL` configuration.")
-                    return
+                    raise RuntimeError(f"Failed to download file from {file_url} (Status {resp.status_code}). Please check Dify `FILES_URL` configuration.")
+            except RuntimeError:
+                raise
             except Exception as re:
-                yield self.create_text_message(f"Error: Failed to download file from {file_url} ({str(re)}). Please check Dify `FILES_URL` configuration and network connectivity.")
-                return
+                raise RuntimeError(f"Failed to download file from {file_url} ({str(re)}). Please check Dify `FILES_URL` configuration and network connectivity.")
         
         if file_content is None:
-            yield self.create_text_message("Error: Unable to retrieve file content. Please check file access permissions and Dify configuration.")
-            return
+            raise ValueError("Unable to retrieve file content. Please check file access permissions and Dify configuration.")
 
         extension = file.extension.lower() if file.extension else ''
         # Remove leading dot if present (e.g., ".pdf" -> "pdf")
@@ -136,13 +131,12 @@ class DocumentParsingTool(Tool):
         # Handle Word files: convert to PDF first
         if extension in ('doc', 'docx'):
             if not pdf_service_url:
-                yield self.create_text_message(
-                    "Error: Word 文件（.doc/.docx）需要配置 'Word to PDF Service URL' 才能解析。"
+                raise ValueError(
+                    "Word 文件（.doc/.docx）需要配置 'Word to PDF Service URL' 才能解析。"
                     "请在插件设置中配置 'Word to PDF Service URL'（例如：http://localhost:31234/convert）。\n\n"
-                    "Error: Word files (.doc/.docx) require 'Word to PDF Service URL' to be configured. "
+                    "Word files (.doc/.docx) require 'Word to PDF Service URL' to be configured. "
                     "Please set 'Word to PDF Service URL' in the plugin provider settings (e.g., http://localhost:31234/convert)."
                 )
-                return
 
             yield self.create_text_message("Converting Word document to PDF...")
             try:
@@ -157,17 +151,17 @@ class DocumentParsingTool(Tool):
                     file_content = resp.content
                     extension = 'pdf'
                 else:
-                    yield self.create_text_message(
-                        f"Error: Word 转 PDF 失败，服务返回状态码 {resp.status_code}。"
+                    raise RuntimeError(
+                        f"Word 转 PDF 失败，服务返回状态码 {resp.status_code}。"
                         f"请检查 Word to PDF 服务是否正常运行（{pdf_service_url}）。"
                     )
-                    return
+            except RuntimeError:
+                raise
             except Exception as convert_e:
-                yield self.create_text_message(
-                    f"Error: Word 转 PDF 失败：{str(convert_e)}。"
+                raise RuntimeError(
+                    f"Word 转 PDF 失败：{str(convert_e)}。"
                     f"请检查 Word to PDF 服务是否正常运行（{pdf_service_url}）。"
                 )
-                return
 
         try:
             if extension == 'pdf':
@@ -183,8 +177,7 @@ class DocumentParsingTool(Tool):
                         results = item
                 
                 if not results:
-                    yield self.create_text_message("Error: No results returned from PDF parsing.")
-                    return
+                    raise RuntimeError("No results returned from PDF parsing.")
                 
                 # Check if any page had errors
                 error_pages = [r for r in results if isinstance(r.get('content'), str) and r.get('content', '').startswith('Error:')]
@@ -197,8 +190,7 @@ class DocumentParsingTool(Tool):
                 try:
                     # Ensure results is not empty
                     if not results:
-                        yield self.create_text_message("Error: No results returned from PDF parsing.")
-                        return
+                        raise RuntimeError("No results returned from PDF parsing.")
                     
                     # Extract full text from all pages
                     full_text_parts = []
@@ -318,52 +310,11 @@ class DocumentParsingTool(Tool):
                         yield self.create_variable_message("full_text", result)
                         yield self.create_variable_message("result", {"raw_result": result, "error": str(e)})
                 else:
-                    yield self.create_text_message("Error: Empty result from image parsing.")
+                    raise RuntimeError("Empty result from image parsing.")
                     
         except KeyboardInterrupt:
-            yield self.create_text_message("Error: Parsing was interrupted by user.")
+            raise
         except Exception as e:
-            # Provide more detailed error information
-            import traceback
-            error_traceback = traceback.format_exc()
-            error_msg = str(e)
-            error_type = type(e).__name__
-            
-            # Try to get more context about the error
-            try:
-                # Check if client exists
-                client_info = f"Client timeout: {client.timeout}s" if 'client' in locals() else "Client not initialized"
-            except:
-                client_info = "Unable to get client info"
-            
-            # Include full traceback in error message for debugging
-            full_error = f"Error type: {error_type}\nError message: {error_msg}\n{client_info}\n\nTraceback:\n{error_traceback}"
-            
-            # Format error message based on error type
-            if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
-                formatted_error = f"Request timeout: The dots_ocr service took longer than {client.timeout if 'client' in locals() else 300} seconds to respond. This may indicate the service is overloaded or the document is too complex.\n\nError details: {error_msg}"
-            elif "json" in error_msg.lower() or "serialization" in error_msg.lower():
-                formatted_error = f"JSON serialization error: {error_msg}\n\nThis may indicate the response from dots_ocr is too large or contains invalid data."
-            elif "connection" in error_msg.lower() or "network" in error_msg.lower():
-                formatted_error = f"Network error: {error_msg}\n\nPlease check the dots_ocr service endpoint and network connectivity."
-            else:
-                formatted_error = f"Error during parsing: {error_msg}"
-            
-            # Send error message (ensure it's not too long for Dify)
-            # Dify may have limits on message length, so we'll keep it reasonable
-            max_error_length = 3000
-            if len(full_error) > max_error_length:
-                error_to_send = f"{formatted_error}\n\nFull error details (truncated):\n{full_error[:max_error_length]}..."
-            else:
-                error_to_send = f"{formatted_error}\n\nFull error details:\n{full_error}"
-            
-            try:
-                yield self.create_text_message(error_to_send)
-            except Exception as yield_error:
-                # If even yielding the error fails, try a minimal error message
-                try:
-                    yield self.create_text_message(f"Critical error: {error_type}: {error_msg[:500]}")
-                except:
-                    # Last resort - this shouldn't happen but if it does, at least we tried
-                    pass
+            # Re-raise so Dify marks the workflow as failed
+            raise
 

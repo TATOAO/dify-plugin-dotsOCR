@@ -26,9 +26,7 @@ class DocumentParsingTool(Tool):
         if not endpoint:
             raise ValueError("vLLM Endpoint not configured in provider settings.")
         
-        # Set timeout to match MAX_REQUEST_TIMEOUT (300 seconds)
-        # This ensures the client timeout matches the plugin timeout
-        timeout = 300
+        timeout = 3600
         client = DotsOCRClient(endpoint=endpoint, model_name=model_name, api_key=api_key, timeout=timeout)
         
         # Get file content

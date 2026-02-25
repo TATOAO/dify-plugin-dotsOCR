@@ -20,7 +20,7 @@
 - `server_port`: vLLM 服务器端口（默认 8001）。
 - `protocol`: 协议类型（http/https）。
 - `model_name`: 模型名称（默认 model）。
-- `timeout`: 请求超时时间（默认 300 秒）。
+- `timeout`: 请求超时时间（默认 3600 秒）。
 
 ## 工具使用
 

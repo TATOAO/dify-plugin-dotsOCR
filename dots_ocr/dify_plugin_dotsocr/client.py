@@ -9,13 +9,13 @@ from openai import OpenAI
 import fitz  # PyMuPDF
 
 class DotsOCRClient:
-    def __init__(self, endpoint: str, model_name: str = 'model', api_key: str = '0', timeout: int = 300):
+    def __init__(self, endpoint: str, model_name: str = 'model', api_key: str = '0', timeout: int = 3600):
         """
         Initialize dots.ocr client
         :param endpoint: vLLM server endpoint (e.g. http://172.20.201.93:8001/v1)
         :param model_name: Model name (default 'model')
         :param api_key: API key (default '0')
-        :param timeout: Request timeout in seconds (default 300)
+        :param timeout: Request timeout in seconds (default 3600)
         """
         self.endpoint = endpoint.rstrip('/')
         self.model_name = model_name
